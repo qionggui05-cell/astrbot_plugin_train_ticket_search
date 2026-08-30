@@ -3,4 +3,4 @@ desc: 火车票查询插件：聚合数据/接口盒子API查票、锁定、余�
 help: 输入 /火车票 帮助 获取插件帮助信息
 version: v1.4.0
 author: deeps
-repo: https://github.com/example/astrbot_plugin_train_ticket_search
+repo: https://github.com/qionggui05-cell/astrbot_plugin_train_ticket_search

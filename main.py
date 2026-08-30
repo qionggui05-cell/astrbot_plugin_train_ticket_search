@@ -46,7 +46,7 @@ HELP_TEXT = "\n".join(
     "deeps",
     "火车票查询插件：聚合数据API查票、锁定、余票提醒、缓存快查与强制更新",
     "v1.4.0",
-    "https://github.com/example/astrbot_plugin_train_ticket_search",
+    "https://github.com/qionggui05-cell/astrbot_plugin_train_ticket_search",
 )
 class TrainTicketSearchPlugin(Star):
     def __init__(self, context: Context, config: dict):
