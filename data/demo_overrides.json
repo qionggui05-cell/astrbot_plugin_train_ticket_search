@@ -1,0 +1,37 @@
+{
+    "flights": [
+        {
+            "date": "2026-08-05",
+            "train_type": "G",
+            "train_no": "G9801",
+            "depart_time": "16:45",
+            "arrive_time": "19:35",
+            "duration": "02:50",
+            "price": 460,
+            "depart": "北京南",
+            "arrive": "苏州北"
+        },
+        {
+            "date": "2026-08-05",
+            "train_type": "D",
+            "train_no": "D3201",
+            "depart_time": "14:20",
+            "arrive_time": "17:05",
+            "duration": "02:45",
+            "price": 380,
+            "depart": "北京南",
+            "arrive": "苏州北"
+        },
+        {
+            "date": "2026-08-06",
+            "train_type": "G",
+            "train_no": "G9801",
+            "depart_time": "16:45",
+            "arrive_time": "19:35",
+            "duration": "02:50",
+            "price": 500,
+            "depart": "北京南",
+            "arrive": "苏州北"
+        }
+    ]
+}

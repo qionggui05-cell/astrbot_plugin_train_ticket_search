@@ -1,0 +1,99 @@
+{
+    "data_source": {
+        "description": "数据源类型",
+        "type": "string",
+        "options": ["juhe", "apihz", "demo"],
+        "default": "juhe",
+        "hint": "juhe=聚合数据火车票查询API（真实数据，消耗每日次数）；apihz=接口盒子12306余票+公示票价API（免费无上限）；demo=演示数据（不消耗API次数）"
+    },
+    "juhe_appkey": {
+        "description": "聚合数据火车票查询API Key",
+        "type": "string",
+        "default": "xxxxxxx",
+        "hint": "必须填写你自己在聚合数据官网（juhe.cn）个人中心->数据中心->我的API中申请的Key；默认 xxxxxxx 为占位符，未填写时无法查询"
+    },
+    "juhe_api_url": {
+        "description": "聚合数据火车票查询接口地址",
+        "type": "string",
+        "default": "https://apis.juhe.cn/fapigw/train/query",
+        "hint": "默认使用聚合数据「火车订票查询」接口；如你申请的是其他火车票接口，可替换为对应接口地址"
+    },
+    "apihz_id": {
+        "description": "接口盒子开发者ID",
+        "type": "string",
+        "default": "xxxxxxx",
+        "hint": "登录 apihz.cn 后台【个人资料】查看；默认 xxxxxxx 为占位符，未填写时无法查询"
+    },
+    "apihz_key": {
+        "description": "接口盒子开发者KEY",
+        "type": "string",
+        "default": "xxxxxxx",
+        "hint": "登录 apihz.cn 后台【个人资料】查看；默认 xxxxxxx 为占位符，未填写时无法查询"
+    },
+    "apihz_api_url": {
+        "description": "接口盒子12306余票信息查询接口地址",
+        "type": "string",
+        "default": "https://cn.apihz.cn/api/12306/api.php",
+        "hint": "文档：https://www.apihz.cn/api/12306api.html"
+    },
+    "apihz_price_url": {
+        "description": "接口盒子12306公示票价查询接口地址",
+        "type": "string",
+        "default": "https://cn.apihz.cn/api/12306/api4.php",
+        "hint": "文档：https://www.apihz.cn/api/12306api4.html"
+    },
+    "apihz_use_detail_price": {
+        "description": "启用接口盒子余票票价补查（按车次逐个查询）",
+        "type": "bool",
+        "default": true,
+        "hint": "默认开启：公示票价接口不返回无座票价，有余票但公示票价缺失的席别会调用余票票价接口（api2）补查；免费接口无上限。无座仍缺价时自动按硬座/二等座票价兜底"
+    },
+    "apihz_detail_price_url": {
+        "description": "接口盒子12306余票票价查询接口地址",
+        "type": "string",
+        "default": "https://cn.apihz.cn/api/12306/api2.php",
+        "hint": "文档：https://www.apihz.cn/api/12306api2.html"
+    },
+    "apihz_detail_price_max_calls": {
+        "description": "每次查询余票票价补查（api2）的最大车次数",
+        "type": "int",
+        "default": 8,
+        "hint": "免费用户 api2 接口约限频 10 次/分钟，默认每次查询最多补查 8 个车次；触发频次限制后自动停止补查，无座票价按硬座/二等座兜底"
+    },
+    "apihz_cookie": {
+        "description": "接口盒子可选 cookie（JSESSIONID）",
+        "type": "string",
+        "default": "",
+        "hint": "可选；查询失败时可填自己的 12306 JSESSIONID（详见接口文档 ck 参数）"
+    },
+    "refresh_interval_hours": {
+        "description": "自动刷新间隔（小时）",
+        "type": "int",
+        "default": 4,
+        "hint": "每4小时刷新一次所有已锁定车次的价格；仅在刷新时调用API（受每日调用次数限制）"
+    },
+    "startup_refresh": {
+        "description": "启动时是否自动刷新一次",
+        "type": "bool",
+        "default": true,
+        "hint": "开启后机器人启动时刷新一次价格；有锁定车次时才会调用API"
+    },
+    "ticket_alert_threshold": {
+        "description": "余票提醒阈值（张）",
+        "type": "int",
+        "default": 10,
+        "hint": "锁定车次默认开启余票提醒，余票低于该张数时自动提醒；用户可用 /火车票 余票提醒 关 关闭"
+    },
+    "max_locked_trains_per_user": {
+        "description": "每个用户最多锁定车次数",
+        "type": "int",
+        "default": 20,
+        "hint": "超过该数量后需先解锁再锁定新车次"
+    },
+    "demo_override_file": {
+        "description": "演示数据价格覆盖文件路径",
+        "type": "string",
+        "default": "",
+        "hint": "JSON 文件，格式如 {\"G9801\": 560}，按车次号覆盖演示价格；留空则使用插件 data 目录下的 demo_overrides.json（不存在则忽略）"
+    }
+}
