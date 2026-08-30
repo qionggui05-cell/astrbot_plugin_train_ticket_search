@@ -92,7 +92,7 @@ GET https://apis.juhe.cn/fapigw/train/query
 
 ## 安装
 
-1. 将 `astrbot_plugin_train_ticket_search` 整个文件夹放入 AstrBot 的插件目录（如 `AstrBot/data/plugins/`）；
+1. 根据Astrbot的插件安装方式（压缩包/项目链接）进行安装；
 2. 重启 AstrBot（或重载插件）。首次加载时 AstrBot 会自动安装 `requirements.txt` 中的依赖（`apscheduler` 用于定时刷新；`requests` 用于请求聚合数据接口）；
 3. 在管理面板确认插件已启用，并**填入你自己的数据源凭据**（默认 `xxxxxxx` 只是占位符）。
 
