@@ -1,6 +1,6 @@
 # AstrBot 火车票查询插件（astrbot_plugin_train_ticket_search）
 
-一个基于 [AstrBot](https://github.com/Soulter/AstrBot) v3.x 的 QQ 机器人火车票查询插件，支持**聚合数据（juhe.cn）**与**接口盒子（apihz.cn）**两种真实数据源，支持锁定车次、余票提醒、缓存快查与强制更新。
+一个基于 [AstrBot](https://github.com/Soulter/AstrBot) v3.x 的 QQ 机器人火车票查询插件，支持**聚合数据（juhe.cn）** 与 **接口盒子（apihz.cn）** 两种真实数据源，支持锁定车次、余票提醒、缓存快查与强制更新。
 
 核心指令：
 
