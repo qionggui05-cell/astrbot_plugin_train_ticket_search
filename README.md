@@ -1,6 +1,6 @@
 # AstrBot 火车票查询插件（astrbot_plugin_train_ticket_search）
 
-一个基于 [AstrBot](https://github.com/Soulter/AstrBot) v3.x 的 QQ 机器人火车票查询插件，支持**聚合数据（juhe.cn）** 与 **接口盒子（apihz.cn）** 两种真实数据源，支持锁定车次、余票提醒、缓存快查与强制更新。
+一个基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) v3.x 的 QQ 机器人火车票查询插件，支持**聚合数据（juhe.cn）** 与 **接口盒子（apihz.cn）** 两种真实数据源，支持锁定车次、余票提醒、缓存快查与强制更新。
 
 核心指令：
 
@@ -16,7 +16,7 @@
 
 ## API 与调用次数说明
 
-### 数据源一：聚合数据（`data_source=juhe`）
+### 数据源一：[聚合数据](https://www.juhe.cn/)（`data_source=juhe`）
 
 使用聚合数据「火车订票查询」接口：
 
@@ -32,7 +32,7 @@ GET https://apis.juhe.cn/fapigw/train/query
 
 该 API 每日调用次数有限（示例 Key 为每日 10 次）。
 
-### 数据源二：接口盒子（`data_source=apihz`）
+### 数据源二：[接口盒子](https://www.apihz.cn/)（`data_source=apihz`）
 
 使用接口盒子（apihz.cn）的 12306 接口（免费、无每日上限）：
 
