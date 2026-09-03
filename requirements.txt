@@ -1,2 +1,2 @@
 apscheduler>=3.10,<4
-requests>=2.28
+httpx>=0.24

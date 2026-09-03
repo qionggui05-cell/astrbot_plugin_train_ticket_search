@@ -29,9 +29,9 @@ Notifier = Callable[[str, str], Awaitable[None]]
 class RefreshResult:
     """一次刷新的明细，供强制更新等指令输出成功/失败构成。"""
 
-    updated_keys: Set[str] = field(default_factory=set)   # 本次成功刷新到的锁定车次 key
+    updated_keys: Set[str] = field(default_factory=set)  # 本次成功刷新到的锁定车次 key
     failed_groups: List[str] = field(default_factory=list)  # 查询失败的线路描述
-    skipped: bool = False   # True 表示已有刷新任务在运行，本次被跳过
+    skipped: bool = False  # True 表示已有刷新任务在运行，本次被跳过
 
     @property
     def updated_count(self) -> int:
@@ -73,7 +73,8 @@ class RefreshScheduler:
                 hours=self.interval_hours,
                 id="train_refresh",
                 replace_existing=True,
-                next_run_time=dt.datetime.now() + dt.timedelta(hours=self.interval_hours),
+                next_run_time=dt.datetime.now()
+                + dt.timedelta(hours=self.interval_hours),
             )
         if not self._scheduler.running:
             self._scheduler.start()
@@ -139,9 +140,7 @@ class RefreshScheduler:
                 self.logger.warning(f"忽略无效日期: {date_str}")
                 continue
             try:
-                trains = await self.provider.search(
-                    depart, arrive, date, sorted(types)
-                )
+                trains = await self.provider.search(depart, arrive, date, sorted(types))
                 ok_groups.add((depart, arrive, date_str))
             except Exception as e:
                 self.logger.exception(f"刷新 {depart}→{arrive} {date_str} 失败: {e}")

@@ -29,8 +29,9 @@ import asyncio
 import datetime as dt
 import logging
 import re
-import time
 from typing import Dict, List, Optional
+
+import httpx
 
 from .juhe_provider import (
     PLACEHOLDER_KEYS,
@@ -40,8 +41,6 @@ from .juhe_provider import (
 )
 from .models import SeatPrice, Train
 from .providers import ProviderError, TicketPriceProvider, register_provider
-
-logger = logging.getLogger("train_apihz")
 
 DEFAULT_AVAIL_URL = "https://cn.apihz.cn/api/12306/api.php"
 DEFAULT_PRICE_URL = "https://cn.apihz.cn/api/12306/api4.php"
@@ -200,13 +199,17 @@ class ApiHzTrainProvider(TicketPriceProvider):
     name = "apihz"
     display_name = "接口盒子(apihz.cn)"
 
-    def __init__(self, config: Optional[dict] = None, plugin_dir: str = ""):
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+        plugin_dir: str = "",
+        logger: Optional[logging.Logger] = None,
+    ):
+        super().__init__(config=config, plugin_dir=plugin_dir, logger=logger)
         self.config = config or {}
         self.app_id = (self.config.get("apihz_id") or "").strip()
         self.app_key = (self.config.get("apihz_key") or "").strip()
-        self.avail_url = (
-            self.config.get("apihz_api_url") or DEFAULT_AVAIL_URL
-        ).strip()
+        self.avail_url = (self.config.get("apihz_api_url") or DEFAULT_AVAIL_URL).strip()
         self.price_url = (
             self.config.get("apihz_price_url") or DEFAULT_PRICE_URL
         ).strip()
@@ -215,9 +218,7 @@ class ApiHzTrainProvider(TicketPriceProvider):
         ).strip()
         # 默认开启余票票价补查：公示票价接口（api4）不返回“无座”票价，
         # 有余票的席别需按车次调用余票票价接口（api2）补查，避免 0 元误导。
-        self.use_detail_price = bool(
-            self.config.get("apihz_use_detail_price", True)
-        )
+        self.use_detail_price = bool(self.config.get("apihz_use_detail_price", True))
         try:
             self.detail_price_max_calls = int(
                 self.config.get(
@@ -260,64 +261,61 @@ class ApiHzTrainProvider(TicketPriceProvider):
             "d": str(date.day),
         }
 
-    def _get_json(self, url: str, params: Dict[str, str]) -> dict:
-        """同步 HTTP 请求（requests），在事件循环外通过线程池调用。"""
-        import requests
-
+    async def _get_json(self, url: str, params: Dict[str, str]) -> dict:
+        """异步 HTTP 请求（httpx）。"""
         if self.cookie:
             params = dict(params)
             params["ck"] = self.cookie
         try:
-            resp = requests.post(url, data=params, timeout=TIMEOUT_SECONDS)
-            resp.raise_for_status()
-            return resp.json()
-        except requests.RequestException as e:
+            async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+                resp = await client.post(url, data=params)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPError as e:
             raise ProviderError(f"接口盒子接口请求失败：{e}") from e
 
-    def _fetch_availability(
+    async def _fetch_availability(
         self, depart: str, arrive: str, date: dt.date
     ) -> List[dict]:
         params = self._base_params(depart, arrive, date)
         last_error = "未知错误"
         for attempt in range(AVAIL_RETRY_ATTEMPTS):
             try:
-                data = self._get_json(self.avail_url, params)
+                data = await self._get_json(self.avail_url, params)
             except Exception as e:
                 last_error = str(e)
                 if attempt + 1 < AVAIL_RETRY_ATTEMPTS:
-                    time.sleep(AVAIL_RETRY_DELAY_SECONDS)
+                    await asyncio.sleep(AVAIL_RETRY_DELAY_SECONDS)
                     continue
                 raise
             if int(data.get("code", 400) or 400) == 200:
                 return list(data.get("datas") or [])
             msg = str(data.get("msg") or "未知错误")
             last_error = msg
-            if attempt + 1 < AVAIL_RETRY_ATTEMPTS and (
-                "重试" in msg or "失败" in msg
-            ):
-                time.sleep(AVAIL_RETRY_DELAY_SECONDS)
+            if attempt + 1 < AVAIL_RETRY_ATTEMPTS and ("重试" in msg or "失败" in msg):
+                await asyncio.sleep(AVAIL_RETRY_DELAY_SECONDS)
                 continue
             break
         raise ProviderError(f"接口盒子余票接口返回错误：{last_error}")
 
-    def _fetch_prices(
+    async def _fetch_prices(
         self, depart: str, arrive: str, date: dt.date
     ) -> Dict[str, dict]:
         """公示票价：train_order（车次号）-> 票价字段字典。失败时返回空字典。"""
         try:
             params = self._base_params(depart, arrive, date)
-            data = self._get_json(self.price_url, params)
+            data = await self._get_json(self.price_url, params)
         except Exception as e:
-            logger.warning(f"公示票价接口查询失败，票价留空继续：{e}")
+            self.logger.warning(f"公示票价接口查询失败，票价留空继续：{e}")
             return {}
         if int(data.get("code", 400) or 400) != 200:
-            logger.warning(
+            self.logger.warning(
                 f"公示票价接口返回错误，票价留空继续：{data.get('msg') or '未知错误'}"
             )
             return {}
         return {str(x.get("train_order") or ""): x for x in data.get("datas") or []}
 
-    def _fetch_detail_price(
+    async def _fetch_detail_price(
         self,
         train_order: str,
         depart_index: str,
@@ -341,7 +339,7 @@ class ApiHzTrainProvider(TicketPriceProvider):
             "d": str(date.day),
         }
         try:
-            data = self._get_json(self.detail_price_url, params)
+            data = await self._get_json(self.detail_price_url, params)
         except Exception as e:
             return {}, str(e)
         if int(data.get("code", 400) or 400) != 200:
@@ -363,7 +361,9 @@ class ApiHzTrainProvider(TicketPriceProvider):
         return self._field_price(field, price_row, detail_row)
 
     @staticmethod
-    def _field_price(field: Optional[str], price_row: dict, detail_row: Optional[dict]) -> float:
+    def _field_price(
+        field: Optional[str], price_row: dict, detail_row: Optional[dict]
+    ) -> float:
         """按公示票价字段取价；缺失或为 0 时回退余票票价（api2）字段。"""
         if not field:
             return 0.0
@@ -419,8 +419,7 @@ class ApiHzTrainProvider(TicketPriceProvider):
         ):
             if detail_ctx["made_calls"] > 0:
                 await asyncio.sleep(DETAIL_PRICE_CALL_DELAY_SECONDS)
-            data, err_msg = await asyncio.to_thread(
-                self._fetch_detail_price,
+            data, err_msg = await self._fetch_detail_price(
                 str(item.get("train_order") or ""),
                 str(item.get("depart_index") or ""),
                 str(item.get("arrive_index") or ""),
@@ -436,12 +435,12 @@ class ApiHzTrainProvider(TicketPriceProvider):
                 # 触发频次限制后停止本次查询的补查，避免继续刷频次与日志
                 detail_ctx["rate_limited"] = True
                 if not detail_ctx["rate_limit_logged"]:
-                    logger.warning(
+                    self.logger.warning(
                         f"余票票价接口调用频次受限，本次查询停止补查：{err_msg}"
                     )
                     detail_ctx["rate_limit_logged"] = True
             else:
-                logger.warning(
+                self.logger.warning(
                     f"余票票价查询失败（{item.get('train_order') or ''}）：{err_msg}"
                 )
 
@@ -456,7 +455,9 @@ class ApiHzTrainProvider(TicketPriceProvider):
                 stock_txt = in_stock[0] if in_stock else (values[0] if values else "无")
                 price = self._field_price(field, price_row, detail_row)
                 if stock_txt != "无" or price > 0:
-                    seats.append(SeatPrice(seat_name=display, price=price, num=stock_txt))
+                    seats.append(
+                        SeatPrice(seat_name=display, price=price, num=stock_txt)
+                    )
         else:
             # 未识别的车次类型：按接口实际返回展示，但仍过滤无票且无价的幽灵席别
             published_names = {
@@ -465,8 +466,7 @@ class ApiHzTrainProvider(TicketPriceProvider):
                 if _price_value(price_row.get(field)) > 0
             }
             names = [
-                n for n in DISPLAY_SEAT_ORDER
-                if n in seat_stock or n in published_names
+                n for n in DISPLAY_SEAT_ORDER if n in seat_stock or n in published_names
             ]
             names += [n for n in seat_stock if n not in names]
             for name in names:
@@ -511,13 +511,9 @@ class ApiHzTrainProvider(TicketPriceProvider):
         if not depart_text or not arrive_text:
             raise ProviderError("出发站/到达站不能为空。")
 
-        raw_trains = await asyncio.to_thread(
-            self._fetch_availability, depart_text, arrive_text, date
-        )
+        raw_trains = await self._fetch_availability(depart_text, arrive_text, date)
         self.record_call()
-        price_map = await asyncio.to_thread(
-            self._fetch_prices, depart_text, arrive_text, date
-        )
+        price_map = await self._fetch_prices(depart_text, arrive_text, date)
         if price_map:
             self.record_call()
 
@@ -540,9 +536,7 @@ class ApiHzTrainProvider(TicketPriceProvider):
                 continue
 
             price_row = price_map.get(train_no) or {}
-            prices = await self._build_seats(
-                item, price_row, date, ttype, detail_ctx
-            )
+            prices = await self._build_seats(item, price_row, date, ttype, detail_ctx)
 
             depart_time = _normalize_time(str(item.get("depart_time") or ""))
             arrive_time = _normalize_time(str(item.get("arrive_time") or ""))
@@ -551,9 +545,7 @@ class ApiHzTrainProvider(TicketPriceProvider):
                 Train(
                     train_type=ttype,
                     train_no=train_no,
-                    depart_station=str(
-                        item.get("depart_name") or depart_text
-                    ),
+                    depart_station=str(item.get("depart_name") or depart_text),
                     arrive_station=str(item.get("arrive_name") or arrive_text),
                     # 统一使用查询日期作为出发日期：接口返回的 datas.date 对部分
                     # 车次（如凌晨发车的 D114）会错位成前一天，导致锁定/提醒日期错误。

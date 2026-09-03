@@ -39,7 +39,9 @@ def total_tickets(prices: List[SeatPrice]) -> int:
     return total
 
 
-def evaluate(locks: List[Lock], new_seats: Dict[str, List[SeatPrice]]) -> List[AlertEvent]:
+def evaluate(
+    locks: List[Lock], new_seats: Dict[str, List[SeatPrice]]
+) -> List[AlertEvent]:
     """根据最新席别余票更新锁定车次并返回需要推送的提醒事件。
 
     提醒依据为**全部席别余票总和**：

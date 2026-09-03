@@ -54,9 +54,7 @@ class FlowEngine:
         session.last_query = trains
         session.step = STEP_DONE
         call_info = (
-            self.call_info_getter()
-            if self.call_info_getter is not None
-            else None
+            self.call_info_getter() if self.call_info_getter is not None else None
         )
         return format_query_results(
             trains, session.date.isoformat(), call_info=call_info

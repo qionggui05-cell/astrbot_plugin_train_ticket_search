@@ -124,7 +124,10 @@ def sample_prices():
 
 def make_provider():
     return ApiHzTrainProvider(
-        config={"apihz_id": "10019837", "apihz_key": "2b71a369ab75dbc3d968a0d52bc9b04e"},
+        config={
+            "apihz_id": "10019837",
+            "apihz_key": "2b71a369ab75dbc3d968a0d52bc9b04e",
+        },
         plugin_dir=".",
     )
 
@@ -147,7 +150,7 @@ def test_parse_availability_and_prices(monkeypatch):
     p = make_provider()
     calls = []
 
-    def fake_get(url, params):
+    async def fake_get(url, params):
         calls.append(url)
         if url.endswith("/api.php"):
             return sample_avail()
@@ -196,11 +199,11 @@ def test_parse_availability_and_prices(monkeypatch):
 
 def test_train_type_filter(monkeypatch):
     p = make_provider()
-    monkeypatch.setattr(
-        p,
-        "_get_json",
-        lambda url, params: sample_avail() if url.endswith("/api.php") else sample_prices(),
-    )
+
+    async def fake_get(url, params):
+        return sample_avail() if url.endswith("/api.php") else sample_prices()
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("西安北", "上海虹桥", QDATE, ["G"]))
     assert [t.train_no for t in trains] == ["G3286"]
 
@@ -209,7 +212,7 @@ def test_price_api_failure_degrades(monkeypatch):
     p = make_provider()
     calls = {"n": 0}
 
-    def fake_get(url, params):
+    async def fake_get(url, params):
         if url.endswith("/api.php"):
             calls["n"] += 1
             return sample_avail()
@@ -225,20 +228,22 @@ def test_price_api_failure_degrades(monkeypatch):
 
 def test_quota_error_raises_friendly(monkeypatch):
     p = make_provider()
-    monkeypatch.setattr(
-        p, "_get_json", lambda url, params: {"code": 400, "msg": "通讯秘钥错误。"}
-    )
+
+    async def fake_get(url, params):
+        return {"code": 400, "msg": "通讯秘钥错误。"}
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     with pytest.raises(ProviderError, match="通讯秘钥错误"):
         run(p.search("西安北", "上海虹桥", QDATE, None))
 
 
 def test_call_count_tracking(monkeypatch):
     p = make_provider()
-    monkeypatch.setattr(
-        p,
-        "_get_json",
-        lambda url, params: sample_avail() if url.endswith("/api.php") else sample_prices(),
-    )
+
+    async def fake_get(url, params):
+        return sample_avail() if url.endswith("/api.php") else sample_prices()
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     run(p.search("西安北", "上海虹桥", QDATE, None))
     assert p.calls_today == 3  # 余票 + 公示票价 + 无座票价补查
     assert p.last_api_call_at is not None
@@ -302,15 +307,13 @@ def sample_sold_out_prices():
 def test_sold_out_train_seats_still_shown(monkeypatch):
     """已售罄车次：公示票价存在的席别即使余票为 无 也展示，避免无票车次消失。"""
     p = make_provider()
-    monkeypatch.setattr(
-        p,
-        "_get_json",
-        lambda url, params: (
-            sample_sold_out()
-            if url.endswith("/api.php")
-            else sample_sold_out_prices()
-        ),
-    )
+
+    async def fake_get(url, params):
+        if url.endswith("/api.php"):
+            return sample_sold_out()
+        return sample_sold_out_prices()
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("西安北", "上海虹桥", QDATE, None))
     assert len(trains) == 1
     seats = {s.seat_name: s for s in trains[0].prices}
@@ -338,7 +341,7 @@ def test_detail_price_fallback_when_enabled(monkeypatch):
     )
     calls = []
 
-    def fake_get(url, params):
+    async def fake_get(url, params):
         calls.append(url)
         if url.endswith("/api.php"):
             return sample_avail()
@@ -367,11 +370,11 @@ def test_uses_query_date_not_api_date(monkeypatch):
     avail = sample_avail()
     for item in avail["datas"]:
         item["date"] = QDATE_PREV_STR  # 模拟接口把 8-7 查询标成 8-6
-    monkeypatch.setattr(
-        p,
-        "_get_json",
-        lambda url, params: avail if url.endswith("/api.php") else sample_prices(),
-    )
+
+    async def fake_get(url, params):
+        return avail if url.endswith("/api.php") else sample_prices()
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("西安北", "上海虹桥", QDATE, None))
     assert len(trains) == 2
     assert all(t.depart_date == QDATE_STR for t in trains)
@@ -391,13 +394,11 @@ def test_wz_price_fallback_when_detail_missing(monkeypatch):
     prices = sample_prices()
     for d in prices["datas"]:
         d.pop("wz", None)  # 公示票价接口没有 wz 字段
-    monkeypatch.setattr(
-        p,
-        "_get_json",
-        lambda url, params: (
-            sample_avail() if url.endswith("/api.php") else prices
-        ),
-    )
+
+    async def fake_get(url, params):
+        return sample_avail() if url.endswith("/api.php") else prices
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("西安北", "上海虹桥", QDATE, None))
     g = next(t for t in trains if t.train_no == "G3286")
     k = next(t for t in trains if t.train_no == "K284")
@@ -412,7 +413,7 @@ def test_availability_transient_error_retries(monkeypatch):
     p = make_provider()
     calls = {"n": 0}
 
-    def fake_get(url, params):
+    async def fake_get(url, params):
         calls["n"] += 1
         if url.endswith("/api.php"):
             if calls["n"] == 1:
@@ -432,7 +433,7 @@ def test_availability_error_raises_after_retries(monkeypatch):
     p = make_provider()
     calls = {"n": 0}
 
-    def fake_get(url, params):
+    async def fake_get(url, params):
         calls["n"] += 1
         return {"code": 400, "msg": "失败，请重试!"}
 
@@ -448,7 +449,7 @@ def test_detail_price_rate_limit_stops_further_calls(monkeypatch):
     p = make_provider()
     calls = {"api2": 0}
 
-    def fake_get(url, params):
+    async def fake_get(url, params):
         if url.endswith("/api.php"):
             return sample_avail()
         if url.endswith("/api4.php"):
@@ -481,7 +482,7 @@ def test_detail_price_capped_per_search(monkeypatch):
     )
     calls = {"api2": 0}
 
-    def fake_get(url, params):
+    async def fake_get(url, params):
         if url.endswith("/api.php"):
             return sample_avail()
         if url.endswith("/api4.php"):
@@ -556,13 +557,11 @@ def test_d_train_seat_names_and_ghost_filter(monkeypatch):
     """D 字头车次只展示 二等座/二等卧/一等卧/无座；卧铺按动车席别命名，
     余票接口返回的幽灵席别（商务座/一等座/硬座等 stock=0）全部过滤。"""
     p = make_provider()
-    monkeypatch.setattr(
-        p,
-        "_get_json",
-        lambda url, params: (
-            sample_d_train() if url.endswith("/api.php") else sample_d_prices()
-        ),
-    )
+
+    async def fake_get(url, params):
+        return sample_d_train() if url.endswith("/api.php") else sample_d_prices()
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("西安", "上海松江", QDATE, ["D"]))
     assert len(trains) == 1
     d = trains[0]

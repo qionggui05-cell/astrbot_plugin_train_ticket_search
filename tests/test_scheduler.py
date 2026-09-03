@@ -13,6 +13,7 @@ from core.storage import LockStorage
 async def async_nop(*_a, **_k):
     """异步空通知器：scheduler 会 await notifier(...)。"""
 
+
 def run(coro):
     return asyncio.run(coro)
 
@@ -416,9 +417,7 @@ def test_refresh_result_reports_updated_and_failed_groups(tmp_path):
     assert result.updated_count == 1
     assert lock_ok.key() in result.updated_keys
     assert lock_fail.key() not in result.updated_keys
-    assert result.failed_groups == [
-        f"上海→北京 {lock_fail.depart_date}"
-    ]
+    assert result.failed_groups == [f"上海→北京 {lock_fail.depart_date}"]
     assert result.skipped is False
 
 

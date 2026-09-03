@@ -19,12 +19,23 @@ TRAIN_TYPE_NAMES = {
 }
 
 TRAIN_TYPE_ALIASES = {
-    "G": "G", "高铁": "G", "高鐵": "G",
-    "D": "D", "动车": "D", "動車": "D",
-    "Z": "Z", "直达": "Z", "直達": "Z", "直达特快": "Z", "直達特快": "Z",
-    "T": "T", "特快": "T",
-    "K": "K", "快速": "K",
-    "O": "O", "其他": "O",
+    "G": "G",
+    "高铁": "G",
+    "高鐵": "G",
+    "D": "D",
+    "动车": "D",
+    "動車": "D",
+    "Z": "Z",
+    "直达": "Z",
+    "直達": "Z",
+    "直达特快": "Z",
+    "直達特快": "Z",
+    "T": "T",
+    "特快": "T",
+    "K": "K",
+    "快速": "K",
+    "O": "O",
+    "其他": "O",
 }
 
 _STATION_CODE_RE = re.compile(r"^[A-Za-z]{3}$")
@@ -49,7 +60,10 @@ def parse_date(
         try:
             d = dt.date.fromisoformat(t.replace("/", "-").replace(".", "-"))
         except ValueError:
-            return None, f"无法识别的日期：{text}。请输入 今天/明天/后天 或 YYYY-MM-DD。"
+            return (
+                None,
+                f"无法识别的日期：{text}。请输入 今天/明天/后天 或 YYYY-MM-DD。",
+            )
     if d < today:
         return None, "日期不能早于今天，请重新输入。"
     if d > today + dt.timedelta(days=MAX_AHEAD_DAYS):
@@ -91,9 +105,7 @@ def parse_train_type_tokens(
     for t in tokens:
         code = TRAIN_TYPE_ALIASES.get((t or "").strip().upper())
         if not code:
-            return None, (
-                f"无法识别的车次类型：{t}。支持：{supported_types_text()}。"
-            )
+            return None, (f"无法识别的车次类型：{t}。支持：{supported_types_text()}。")
         if code not in types:
             types.append(code)
     return types, None

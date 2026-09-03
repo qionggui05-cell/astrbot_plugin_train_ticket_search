@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import logging
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
@@ -48,8 +49,13 @@ class DemoProvider(TicketPriceProvider):
     name = "demo"
     display_name = "演示数据(不消耗API次数)"
 
-    def __init__(self, config: Optional[dict] = None, plugin_dir: str = ""):
-        super().__init__(config=config, plugin_dir=plugin_dir)
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+        plugin_dir: str = "",
+        logger: Optional[logging.Logger] = None,
+    ):
+        super().__init__(config=config, plugin_dir=plugin_dir, logger=logger)
         self.config = config or {}
         override_path = self.config.get("demo_override_file") or os.path.join(
             plugin_dir, "data", "demo_overrides.json"

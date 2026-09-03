@@ -48,9 +48,21 @@ def sample_result():
     }
 
 
+async def _sample_result(params):
+    return sample_result()
+
+
+async def _empty_result(params):
+    return {"error_code": 0, "result": []}
+
+
+async def _quota_error_result(params):
+    return {"error_code": 10012, "reason": "请求超过次数限制"}
+
+
 def test_pick_preferred_seat_and_type_filter(monkeypatch):
     p = JuheTrainProvider(config={"juhe_appkey": "key"}, plugin_dir=".")
-    monkeypatch.setattr(p, "_get_json", lambda params: sample_result())
+    monkeypatch.setattr(p, "_get_json", _sample_result)
     trains = run(p.search("北京南", "苏州北", QDATE, ["G"]))
     assert len(trains) == 1
     t = trains[0]
@@ -63,7 +75,7 @@ def test_pick_preferred_seat_and_type_filter(monkeypatch):
 
 def test_all_types_without_filter(monkeypatch):
     p = JuheTrainProvider(config={"juhe_appkey": "key"}, plugin_dir=".")
-    monkeypatch.setattr(p, "_get_json", lambda params: sample_result())
+    monkeypatch.setattr(p, "_get_json", _sample_result)
     trains = run(p.search("北京南", "苏州北", QDATE, None))
     assert {t.train_no for t in trains} == {"G25", "K101"}
     k101 = next(t for t in trains if t.train_no == "K101")
@@ -75,7 +87,7 @@ def test_station_code_uses_search_type_2(monkeypatch):
     p = JuheTrainProvider(config={"juhe_appkey": "key"}, plugin_dir=".")
     seen = {}
 
-    def fake_get(params):
+    async def fake_get(params):
         seen.update(params)
         return sample_result()
 
@@ -100,7 +112,7 @@ def test_placeholder_key_raises():
 
 def test_date_beyond_limit_raises(monkeypatch):
     p = JuheTrainProvider(config={"juhe_appkey": "key"}, plugin_dir=".")
-    monkeypatch.setattr(p, "_get_json", lambda params: sample_result())
+    monkeypatch.setattr(p, "_get_json", _sample_result)
     far = dt.date.today() + dt.timedelta(days=20)
     with pytest.raises(ProviderError):
         run(p.search("北京南", "苏州北", far, None))
@@ -108,18 +120,14 @@ def test_date_beyond_limit_raises(monkeypatch):
 
 def test_quota_error_raises_friendly(monkeypatch):
     p = JuheTrainProvider(config={"juhe_appkey": "key"}, plugin_dir=".")
-    monkeypatch.setattr(
-        p,
-        "_get_json",
-        lambda params: {"error_code": 10012, "reason": "请求超过次数限制"},
-    )
+    monkeypatch.setattr(p, "_get_json", _quota_error_result)
     with pytest.raises(ProviderError, match="次数已达上限"):
         run(p.search("北京南", "苏州北", QDATE, None))
 
 
 def test_no_result_returns_empty(monkeypatch):
     p = JuheTrainProvider(config={"juhe_appkey": "key"}, plugin_dir=".")
-    monkeypatch.setattr(p, "_get_json", lambda params: {"error_code": 0, "result": []})
+    monkeypatch.setattr(p, "_get_json", _empty_result)
     trains = run(p.search("北京南", "苏州北", QDATE, None))
     assert trains == []
 
@@ -143,7 +151,11 @@ def test_sold_out_trains_still_listed(monkeypatch):
             }
         ],
     }
-    monkeypatch.setattr(p, "_get_json", lambda params: result)
+
+    async def fake_get(params):
+        return result
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("北京南", "苏州北", QDATE, None))
     assert len(trains) == 1
     assert trains[0].train_no == "G1"
@@ -171,7 +183,11 @@ def test_sold_out_train_with_zero_prices_still_listed(monkeypatch):
             }
         ],
     }
-    monkeypatch.setattr(p, "_get_json", lambda params: result)
+
+    async def fake_get(params):
+        return result
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("西安", "上海松江", QDATE, None))
     assert len(trains) == 1
     assert trains[0].train_no == "D114"
@@ -199,7 +215,11 @@ def test_wz_price_fallback_when_zero_with_stock(monkeypatch):
             }
         ],
     }
-    monkeypatch.setattr(p, "_get_json", lambda params: result)
+
+    async def fake_get(params):
+        return result
+
+    monkeypatch.setattr(p, "_get_json", fake_get)
     trains = run(p.search("西安", "上海", QDATE, None))
     wz = next(s for s in trains[0].prices if s.seat_name == "无座")
     assert wz.num == "有"

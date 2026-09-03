@@ -20,8 +20,7 @@ def make_lock(alert=True, threshold=10, last_num="", armed=True):
 
 def seats(*nums):
     return [
-        SeatPrice(seat_name=f"席{i + 1}", price=100, num=n)
-        for i, n in enumerate(nums)
+        SeatPrice(seat_name=f"席{i + 1}", price=100, num=n) for i, n in enumerate(nums)
     ]
 
 

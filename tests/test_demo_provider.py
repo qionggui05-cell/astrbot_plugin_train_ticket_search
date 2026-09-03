@@ -15,7 +15,9 @@ def test_search_returns_trains_for_route_date():
     assert len(trains) > 0
     types = {t.train_type for t in trains}
     assert {"G", "D"} == types
-    assert all(t.depart_station == "北京南" and t.arrive_station == "苏州北" for t in trains)
+    assert all(
+        t.depart_station == "北京南" and t.arrive_station == "苏州北" for t in trains
+    )
     assert all(t.depart_date == "2026-08-10" for t in trains)
     assert all(t.price > 0 for t in trains)
 
@@ -58,7 +60,9 @@ def test_fixture_trains(tmp_path):
         ),
         encoding="utf-8",
     )
-    p = DemoProvider(config={"demo_override_file": str(fixture)}, plugin_dir=str(tmp_path))
+    p = DemoProvider(
+        config={"demo_override_file": str(fixture)}, plugin_dir=str(tmp_path)
+    )
     trains = run(p.search("北京南", "苏州北", dt.date(2026, 9, 5), ["G"]))
     assert any(t.train_no == "G9801" and t.price == 460 for t in trains)
     # 未绑定线路时（缺 depart/arrive）任意线路都会出现
@@ -80,7 +84,9 @@ def test_fixture_trains(tmp_path):
         ),
         encoding="utf-8",
     )
-    p2 = DemoProvider(config={"demo_override_file": str(fixture)}, plugin_dir=str(tmp_path))
+    p2 = DemoProvider(
+        config={"demo_override_file": str(fixture)}, plugin_dir=str(tmp_path)
+    )
     assert any(
         t.train_no == "G9801"
         for t in run(p2.search("上海虹桥", "杭州东", dt.date(2026, 9, 5), ["G"]))
@@ -93,7 +99,9 @@ def test_legacy_price_override(tmp_path):
     trains = run(p0.search("北京南", "苏州北", dt.date(2026, 8, 10), ["G"]))
     target = trains[0]
     override.write_text(json.dumps({target.train_no: 199}), encoding="utf-8")
-    p1 = DemoProvider(config={"demo_override_file": str(override)}, plugin_dir=str(tmp_path))
+    p1 = DemoProvider(
+        config={"demo_override_file": str(override)}, plugin_dir=str(tmp_path)
+    )
     trains2 = run(p1.search("北京南", "苏州北", dt.date(2026, 8, 10), ["G"]))
     match = next(t for t in trains2 if t.train_no == target.train_no)
     assert match.price == 199

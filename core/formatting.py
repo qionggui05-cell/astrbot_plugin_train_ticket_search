@@ -55,7 +55,9 @@ def format_query_results(
     lines.append("数据来源：" + (trains[0].source_note or "聚合数据火车票查询API"))
     lines.append(format_call_info_line(call_info))
     lines.append(f"共 {len(trains)} 个车次（已按发车时间排序）")
-    lines.append("提示：回复 /火车票 锁定 <车次号> 可锁定车次（多个车次号用空格分隔）。")
+    lines.append(
+        "提示：回复 /火车票 锁定 <车次号> 可锁定车次（多个车次号用空格分隔）。"
+    )
     return "\n".join(lines)
 
 
@@ -133,7 +135,9 @@ def _latest_updated_at(locks: List[Lock]) -> str:
     return _dt_display(ts)
 
 
-def format_call_info_line(call_info: Optional[dict], locks: Optional[List[Lock]] = None) -> str:
+def format_call_info_line(
+    call_info: Optional[dict], locks: Optional[List[Lock]] = None
+) -> str:
     """数据更新时间 + API 调用次数展示行。"""
     locks = locks or []
     info = call_info or {}
@@ -143,8 +147,7 @@ def format_call_info_line(call_info: Optional[dict], locks: Optional[List[Lock]]
     if not updated or updated == "暂无":
         updated = _latest_updated_at(locks)
     return (
-        f"数据来源：{source} ｜ 今日API调用次数：{calls} 次 ｜ "
-        f"数据更新时间：{updated}"
+        f"数据来源：{source} ｜ 今日API调用次数：{calls} 次 ｜ 数据更新时间：{updated}"
     )
 
 

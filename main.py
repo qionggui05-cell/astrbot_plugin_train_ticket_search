@@ -1,12 +1,13 @@
+from __future__ import annotations
+
 import datetime as dt
 import json
-import logging
 import os
 import re
 from typing import List, Optional
 
-from astrbot.api.all import AstrMessageEvent, Context, Star, command_group, register
-from astrbot.api.event import MessageChain, filter
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
+from astrbot.api.star import Context, Star, register
 
 from .core import create_provider
 from .core.flow import FlowEngine
@@ -21,6 +22,7 @@ from .core.scheduler import RefreshScheduler
 from .core.session import SessionManager
 from .core.storage import LockStorage
 
+PLUGIN_NAME = "astrbot_plugin_train_ticket_search"
 KNOWN_SOURCES = ("juhe", "apihz", "demo")
 
 HELP_TEXT = "\n".join(
@@ -42,32 +44,33 @@ HELP_TEXT = "\n".join(
 
 
 @register(
-    "astrbot_plugin_train_ticket_search",
-    "deeps",
+    PLUGIN_NAME,
+    "qionggui",
     "火车票查询插件：聚合数据API查票、锁定、余票提醒、缓存快查与强制更新",
-    "v1.4.0",
-    "https://github.com/qionggui05-cell/astrbot_plugin_train_ticket_search",
+    "v1.4.2",
 )
 class TrainTicketSearchPlugin(Star):
+    """火车票查询插件（/火车票 帮助 可查看全部指令）。"""
+
     def __init__(self, context: Context, config: dict):
         super().__init__(context)
-        self.logger = logging.getLogger("train_ticket_search")
         self.config = config or {}
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self.data_dir = os.path.join(self.plugin_dir, "data")
+        # 运行数据存放在 AstrBot 的 data/plugin_data/{插件名}/ 下，
+        # 防止插件更新/重装时用户数据被覆盖；无法获取该目录时回退到插件内 data/。
+        self.data_dir = self._resolve_data_dir()
         os.makedirs(self.data_dir, exist_ok=True)
+        self._migrate_runtime_files()
 
         self.command_prefix = self.config.get("command_prefix", "/") or "/"
-        self.max_locks = int(
-            self.config.get("max_locked_trains_per_user", 20) or 20
-        )
+        self.max_locks = int(self.config.get("max_locked_trains_per_user", 20) or 20)
         self.startup_refresh = bool(self.config.get("startup_refresh", True))
         self.ticket_alert_threshold = int(
             self.config.get("ticket_alert_threshold", 10) or 10
         )
 
         self.storage = LockStorage(os.path.join(self.data_dir, "locks.json"))
-        # 数据源：聊天指令切换的结果保存在 data/runtime_config.json，
+        # 数据源：聊天指令切换的结果保存在数据目录的 runtime_config.json，
         # 优先于管理面板配置（重启后仍生效）。
         source_name = self._load_runtime_source() or (
             (self.config.get("data_source", "juhe") or "juhe").strip().lower()
@@ -76,10 +79,20 @@ class TrainTicketSearchPlugin(Star):
             self.logger.warning(f"配置的数据源 {source_name!r} 无效，回退为 juhe")
             source_name = "juhe"
         try:
-            self.provider = create_provider(source_name, self.config, self.plugin_dir)
+            self.provider = create_provider(
+                source_name,
+                self.config,
+                self.plugin_dir,
+                logger=self.logger,
+            )
         except Exception:
             self.logger.exception(f"创建数据源 {source_name} 失败，回退为 demo")
-            self.provider = create_provider("demo", self.config, self.plugin_dir)
+            self.provider = create_provider(
+                "demo",
+                self.config,
+                self.plugin_dir,
+                logger=self.logger,
+            )
         self.sessions = SessionManager(timeout_seconds=600)
         self.flow = FlowEngine(
             search=self.provider.search,
@@ -98,8 +111,33 @@ class TrainTicketSearchPlugin(Star):
             f"刷新间隔={self.scheduler.interval_hours}小时"
         )
 
+    def _resolve_data_dir(self) -> str:
+        """解析 AstrBot 规定的插件运行数据目录。"""
+        try:
+            from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+
+            return os.path.join(get_astrbot_data_path(), "plugin_data", PLUGIN_NAME)
+        except Exception:
+            return os.path.join(self.plugin_dir, "data")
+
+    def _migrate_runtime_files(self) -> None:
+        """把旧版插件 data/ 下的运行数据迁移到新数据目录（避免升级丢数据）。"""
+        legacy_dir = os.path.join(self.plugin_dir, "data")
+        if os.path.abspath(legacy_dir) == os.path.abspath(self.data_dir):
+            return
+        for filename in ("locks.json", "runtime_config.json"):
+            legacy_file = os.path.join(legacy_dir, filename)
+            new_file = os.path.join(self.data_dir, filename)
+            if os.path.exists(legacy_file) and not os.path.exists(new_file):
+                try:
+                    os.replace(legacy_file, new_file)
+                except OSError:
+                    self.logger.exception(
+                        f"迁移旧版数据文件 {legacy_file} 到 {new_file} 失败"
+                    )
+
     async def initialize(self) -> None:
-        # AstrBot 生命周期钩子：启动时刷新一次（有锁定车次才调用 API），并启动定时刷新
+        """AstrBot 生命周期钩子：启动时刷新一次（有锁定车次才调用 API），并启动定时刷新。"""
         if self.startup_refresh:
             try:
                 await self.scheduler.refresh_once()
@@ -113,6 +151,7 @@ class TrainTicketSearchPlugin(Star):
         )
 
     async def terminate(self) -> None:
+        """AstrBot 生命周期钩子：插件卸载/停用时停止定时调度器。"""
         try:
             self.scheduler.shutdown()
         except Exception:
@@ -144,7 +183,12 @@ class TrainTicketSearchPlugin(Star):
 
     def _build_provider(self, name: str):
         """创建数据源并提前校验凭据，避免切换到未配置的数据源后使用时才报错。"""
-        provider = create_provider(name, self.config, self.plugin_dir)
+        provider = create_provider(
+            name,
+            self.config,
+            self.plugin_dir,
+            logger=self.logger,
+        )
         if provider.name == "juhe":
             from .core.juhe_provider import PLACEHOLDER_KEYS
 
@@ -174,23 +218,24 @@ class TrainTicketSearchPlugin(Star):
         text = re.sub(r"^\s*" + re.escape(self.command_prefix), "", text)
         return [t for t in re.split(r"\s+", text) if t]
 
-    @command_group("火车票")
+    @filter.command_group("火车票")
     def train_group(self):
-        # 火车票相关指令组。用法：/火车票 <子指令>
-        pass
+        """火车票指令组：/火车票 <子指令>。"""
 
     @train_group.command("帮助")
     async def cmd_help(self, event: AstrMessageEvent):
+        """显示插件帮助与全部指令用法。"""
         yield event.plain_result(HELP_TEXT)
 
     @train_group.command("查票")
     async def cmd_search(self, event: AstrMessageEvent):
+        """交互式查询车次与票价（可选 G/D/Z/T/K/O 类型过滤）。"""
         tokens = self._tokens(event)
         train_types, err = parse_train_type_tokens(tokens[2:])
         if err:
             yield event.plain_result(err)
             return
-        session = self.sessions.start(
+        self.sessions.start(
             str(event.get_sender_id()), event.unified_msg_origin, train_types
         )
         yield event.plain_result(
@@ -200,6 +245,7 @@ class TrainTicketSearchPlugin(Star):
 
     @train_group.command("锁定")
     async def cmd_lock(self, event: AstrMessageEvent):
+        """锁定最近一次查询结果中的车次（默认开启余票提醒）。"""
         sender = str(event.get_sender_id())
         tokens = self._tokens(event)
         train_tokens = [t.upper() for t in tokens[2:]]
@@ -218,7 +264,8 @@ class TrainTicketSearchPlugin(Star):
         unknown = [t for t in train_tokens if t not in by_no]
         if unknown:
             yield event.plain_result(
-                "以下车次号不在最近查询结果中：" + "、".join(unknown)
+                "以下车次号不在最近查询结果中："
+                + "、".join(unknown)
                 + "。请先 /火车票 查票 后再锁定。"
             )
             return
@@ -262,6 +309,7 @@ class TrainTicketSearchPlugin(Star):
 
     @train_group.command("解锁")
     async def cmd_unlock(self, event: AstrMessageEvent):
+        """解锁已锁定车次，可按日期过滤。"""
         sender = str(event.get_sender_id())
         tokens = self._tokens(event)
         train_tokens: List[str] = []
@@ -283,6 +331,7 @@ class TrainTicketSearchPlugin(Star):
 
     @train_group.command("余票提醒")
     async def cmd_ticket_alert(self, event: AstrMessageEvent):
+        """开关所选锁定车次的余票提醒（可选车次号与日期）。"""
         sender = str(event.get_sender_id())
         tokens = self._tokens(event)
         args = tokens[2:]
@@ -327,7 +376,7 @@ class TrainTicketSearchPlugin(Star):
 
     @train_group.command("快查")
     async def cmd_quick(self, event: AstrMessageEvent):
-        # 获取价格指令：只读取本地已保存的缓存价格，不调用 API
+        """查看已锁定车次的缓存价格（不调用 API）。"""
         sender = str(event.get_sender_id())
         removed = self.storage.remove_departed(sender)
         locks = self.storage.locks_by_user(sender)
@@ -342,6 +391,7 @@ class TrainTicketSearchPlugin(Star):
 
     @train_group.command("强制更新")
     async def cmd_force_update(self, event: AstrMessageEvent):
+        """立即调用数据源刷新所有已锁定车次的价格与余票。"""
         sender = str(event.get_sender_id())
         locks = self.storage.locks_by_user(sender)
         if not locks:
@@ -383,6 +433,7 @@ class TrainTicketSearchPlugin(Star):
 
     @train_group.command("我的")
     async def cmd_mine(self, event: AstrMessageEvent):
+        """查看当前用户已锁定的车次与余票提醒状态。"""
         sender = str(event.get_sender_id())
         self.storage.remove_departed(sender)
         locks = self.storage.locks_by_user(sender)
@@ -390,6 +441,7 @@ class TrainTicketSearchPlugin(Star):
 
     @train_group.command("数据源")
     async def cmd_data_source(self, event: AstrMessageEvent):
+        """查看或切换数据源（juhe/apihz/demo）。"""
         tokens = self._tokens(event)
         arg = (tokens[2] if len(tokens) > 2 else "").strip().lower()
         if not arg:
@@ -424,7 +476,7 @@ class TrainTicketSearchPlugin(Star):
 
     @filter.regex(r".+")
     async def on_plain_reply(self, event: AstrMessageEvent):
-        # 多轮交互：捕获普通消息并消费进行中的查询会话；无会话或命令消息则放行
+        """消费多轮查票会话中的普通回复；无进行中会话时放行消息。"""
         text = (getattr(event, "message_str", "") or "").strip()
         if not text or text.startswith(self.command_prefix):
             return

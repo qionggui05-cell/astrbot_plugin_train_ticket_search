@@ -1,6 +1,6 @@
 # AstrBot 火车票查询插件（astrbot_plugin_train_ticket_search）
 
-一个基于 [AstrBot](https://github.com/Soulter/AstrBot) v3.x 的 QQ 机器人火车票查询插件，支持**聚合数据（juhe.cn）**与**接口盒子（apihz.cn）**两种真实数据源，支持锁定车次、余票提醒、缓存快查与强制更新。
+一个基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) v4.x（>=4.17）的 QQ 机器人火车票查询插件，支持**聚合数据（juhe.cn）** 与 **接口盒子（apihz.cn）** 两种真实数据源，支持锁定车次、余票提醒、缓存快查与强制更新。
 
 核心指令：
 
@@ -16,7 +16,7 @@
 
 ## API 与调用次数说明
 
-### 数据源一：聚合数据（`data_source=juhe`）
+### 数据源一：[聚合数据](https://www.juhe.cn/)（`data_source=juhe`）
 
 使用聚合数据「火车订票查询」接口：
 
@@ -32,7 +32,7 @@ GET https://apis.juhe.cn/fapigw/train/query
 
 该 API 每日调用次数有限（示例 Key 为每日 10 次）。
 
-### 数据源二：接口盒子（`data_source=apihz`）
+### 数据源二：[接口盒子](https://www.apihz.cn/)（`data_source=apihz`）
 
 使用接口盒子（apihz.cn）的 12306 接口（免费、无每日上限）：
 
@@ -70,7 +70,7 @@ GET https://apis.juhe.cn/fapigw/train/query
 | `/火车票 快查`（获取价格）               | **否**，只读本地缓存 |
 | `/火车票 我的` / `/火车票 帮助`         | 否            |
 
-每次刷新/强制更新后，价格会立即写入 `data/locks.json` 保存，重启不丢失；`/火车票 快查` 展示的就是最近一次保存的价格。同一时刻只允许一个刷新任务运行，启动/定时/强制刷新重叠时不会重复调用 API。
+每次刷新/强制更新后，价格会立即写入运行数据目录中的 `locks.json` 保存，重启不丢失；`/火车票 快查` 展示的就是最近一次保存的价格。同一时刻只允许一个刷新任务运行，启动/定时/强制刷新重叠时不会重复调用 API。
 
 余票提醒覆盖**所有已锁定车次**：余票为 0（全部席别售罄）的车次同样参与提醒；
 定时刷新时若某条线路查询成功但结果中未返回已锁定车次（如已售罄未列出），
@@ -92,8 +92,8 @@ GET https://apis.juhe.cn/fapigw/train/query
 
 ## 安装
 
-1. 将 `astrbot_plugin_train_ticket_search` 整个文件夹放入 AstrBot 的插件目录（如 `AstrBot/data/plugins/`）；
-2. 重启 AstrBot（或重载插件）。首次加载时 AstrBot 会自动安装 `requirements.txt` 中的依赖（`apscheduler` 用于定时刷新；`requests` 用于请求聚合数据接口）；
+1. 根据Astrbot的插件安装方式（压缩包/项目链接）进行安装；
+2. 重启 AstrBot（或重载插件）。首次加载时 AstrBot 会自动安装 `requirements.txt` 中的依赖（`apscheduler` 用于定时刷新；`httpx` 用于异步请求数据源接口）；
 3. 在管理面板确认插件已启用，并**填入你自己的数据源凭据**（默认 `xxxxxxx` 只是占位符）。
 
 ## 指令说明
@@ -205,9 +205,14 @@ GET https://apis.juhe.cn/fapigw/train/query
 
 ## 数据文件
 
-- `data/locks.json`：用户锁定车次与提醒设置，JSON 持久化，重启不丢失；文件损坏时会自动备份为 `locks.json.corrupt-<时间戳>` 并重建。
-- `data/runtime_config.json`：聊天指令 `/火车票 数据源` 切换后保存的数据源名，优先于管理面板配置，重启后仍生效。
-- `data/demo_overrides.json`：可选的演示价格覆盖文件（首次运行时自动创建 data 目录）。
+按照 [AstrBot 插件存储规范](https://docs.astrbot.app/dev/star/guides/storage.html)，运行数据保存在 AstrBot 根目录的 `data/plugin_data/astrbot_plugin_train_ticket_search/` 下，插件更新/重装时不会被覆盖：
+
+- `locks.json`：用户锁定车次与提醒设置，JSON 持久化，重启不丢失；文件损坏时会自动备份为 `locks.json.corrupt-<时间戳>` 并重建。
+- `runtime_config.json`：聊天指令 `/火车票 数据源` 切换后保存的数据源名，优先于管理面板配置，重启后仍生效。
+
+> 旧版本保存在插件目录 `data/` 下的 `locks.json`/`runtime_config.json`，首次启动时会自动迁移到上述目录。
+
+- 插件自带 `data/demo_overrides.json`：可选的演示价格覆盖文件（随插件分发，不会写入运行数据）。
 
 ## 开发与测试
 
@@ -218,7 +223,7 @@ pip install -r requirements.txt pytest
 python -m pytest tests/ -v
 ```
 
-运行环境要求：Python 3.10+、AstrBot v3.x。
+运行环境要求：Python 3.10+、AstrBot v4.x（>=4.17）。
 
 ## 免责声明
 

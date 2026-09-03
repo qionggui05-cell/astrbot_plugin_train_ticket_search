@@ -19,17 +19,16 @@ duration、enable_booking、prices[]（seat_name/price/num）等字段。
 
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import logging
 import re
 from typing import Dict, List, Optional
 
+import httpx
+
 from .models import SeatPrice, Train
 from .parsing import TRAIN_TYPE_NAMES
 from .providers import ProviderError, TicketPriceProvider, register_provider
-
-logger = logging.getLogger("train_juhe")
 
 DEFAULT_API_URL = "https://apis.juhe.cn/fapigw/train/query"
 DEFAULT_MAX_AHEAD_DAYS = 15
@@ -143,8 +142,13 @@ class JuheTrainProvider(TicketPriceProvider):
     name = "juhe"
     display_name = "聚合数据(juhe.cn)"
 
-    def __init__(self, config: Optional[dict] = None, plugin_dir: str = ""):
-        super().__init__(config=config, plugin_dir=plugin_dir)
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+        plugin_dir: str = "",
+        logger: Optional[logging.Logger] = None,
+    ):
+        super().__init__(config=config, plugin_dir=plugin_dir, logger=logger)
         self.config = config or {}
         self.appkey = (self.config.get("juhe_appkey") or "").strip()
         self.api_url = (self.config.get("juhe_api_url") or DEFAULT_API_URL).strip()
@@ -156,15 +160,14 @@ class JuheTrainProvider(TicketPriceProvider):
         except (TypeError, ValueError):
             self.max_ahead_days = DEFAULT_MAX_AHEAD_DAYS
 
-    def _get_json(self, params: Dict[str, str]) -> dict:
-        """同步 HTTP 请求（requests），在事件循环外通过线程池调用。"""
-        import requests
-
+    async def _get_json(self, params: Dict[str, str]) -> dict:
+        """异步 HTTP 请求（httpx）。"""
         try:
-            resp = requests.get(self.api_url, params=params, timeout=TIMEOUT_SECONDS)
-            resp.raise_for_status()
-            return resp.json()
-        except requests.RequestException as e:
+            async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+                resp = await client.get(self.api_url, params=params)
+                resp.raise_for_status()
+                return resp.json()
+        except httpx.HTTPError as e:
             raise ProviderError(f"聚合数据接口请求失败：{e}") from e
 
     async def search(
@@ -204,7 +207,7 @@ class JuheTrainProvider(TicketPriceProvider):
             "enable_booking": "2",
         }
 
-        data = await asyncio.to_thread(self._get_json, params)
+        data = await self._get_json(params)
         self.record_call()
         error_code = data.get("error_code")
         if error_code not in (0, None):

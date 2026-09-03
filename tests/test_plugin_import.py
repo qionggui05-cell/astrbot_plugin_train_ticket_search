@@ -11,10 +11,13 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 STUB_FILES = {
     "astrbot/__init__.py": "",
     "astrbot/api/__init__.py": "",
-    "astrbot/api/all.py": (
+    "astrbot/api/star/__init__.py": (
+        "import logging\n"
+        "\n"
         "class Star:\n"
         "    def __init__(self, context, config=None):\n"
         "        self.context = context\n"
+        "        self.logger = logging.getLogger('astrbot_test_plugin')\n"
         "\n"
         "class AstrMessageEvent:\n"
         "    pass\n"
@@ -26,7 +29,16 @@ STUB_FILES = {
         "    def deco(cls):\n"
         "        return cls\n"
         "    return deco\n"
+    ),
+    "astrbot/api/event/__init__.py": (
+        "class AstrMessageEvent:\n"
+        "    pass\n"
         "\n"
+        "class MessageChain:\n"
+        "    def message(self, text):\n"
+        "        return self\n"
+    ),
+    "astrbot/api/event/filter/__init__.py": (
         "def command_group(name):\n"
         "    class _G:\n"
         "        def command(self, *a, **k):\n"
@@ -36,13 +48,7 @@ STUB_FILES = {
         "    def deco(f):\n"
         "        return _G()\n"
         "    return deco\n"
-    ),
-    "astrbot/api/event/__init__.py": (
-        "class MessageChain:\n"
-        "    def message(self, text):\n"
-        "        return self\n"
-    ),
-    "astrbot/api/event/filter/__init__.py": (
+        "\n"
         "def regex(pattern):\n"
         "    def deco(f):\n"
         "        return f\n"
@@ -61,7 +67,9 @@ def test_plugin_imports_as_v4_package(tmp_path):
     data_root = tmp_path / "root"
     (data_root / "data" / "plugins").mkdir(parents=True)
     (data_root / "data").joinpath("__init__.py").write_text("", encoding="utf-8")
-    (data_root / "data" / "plugins").joinpath("__init__.py").write_text("", encoding="utf-8")
+    (data_root / "data" / "plugins").joinpath("__init__.py").write_text(
+        "", encoding="utf-8"
+    )
     for rel, content in STUB_FILES.items():
         p = data_root / rel
         p.parent.mkdir(parents=True, exist_ok=True)

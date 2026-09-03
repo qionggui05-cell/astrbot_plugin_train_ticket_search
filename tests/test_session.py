@@ -3,7 +3,12 @@ import datetime as dt
 
 from core.flow import FlowEngine
 from core.models import Train
-from core.parsing import parse_amount, parse_date, parse_train_type_tokens, resolve_station
+from core.parsing import (
+    parse_amount,
+    parse_date,
+    parse_train_type_tokens,
+    resolve_station,
+)
 from core.providers import ProviderError
 from core.session import SessionManager
 
@@ -21,7 +26,9 @@ class FakeSearch:
         self.calls = []
 
     async def __call__(self, depart, arrive, date, train_types):
-        self.calls.append((depart, arrive, date, list(train_types) if train_types else None))
+        self.calls.append(
+            (depart, arrive, date, list(train_types) if train_types else None)
+        )
         return [
             Train(
                 train_type="G",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import datetime as dt
+import logging
 from typing import Dict, List, Optional, Type
 
 from .models import Train
@@ -23,8 +24,16 @@ class TicketPriceProvider(abc.ABC):
     name: str = "base"
     display_name: str = ""
 
-    def __init__(self, config: Optional[dict] = None, plugin_dir: str = ""):
-        self.calls_today: int = 0          # 今日已调用 API 次数（成功请求）
+    def __init__(
+        self,
+        config: Optional[dict] = None,
+        plugin_dir: str = "",
+        logger: Optional[logging.Logger] = None,
+    ):
+        # AstrBot 运行时由 main.py 注入插件专用 logger；独立测试/无 AstrBot 环境
+        # 退化为标准 logging，保证核心模块可单独运行。
+        self.logger = logger or logging.getLogger("astrbot_plugin_train_ticket_search")
+        self.calls_today: int = 0  # 今日已调用 API 次数（成功请求）
         self.last_api_call_at: Optional[dt.datetime] = None  # 最近一次调用时间
 
     def record_call(self) -> None:
@@ -77,9 +86,14 @@ def register_provider(cls: Type[TicketPriceProvider]) -> Type[TicketPriceProvide
     return cls
 
 
-def create_provider(name: str, config: dict, plugin_dir: str) -> TicketPriceProvider:
+def create_provider(
+    name: str,
+    config: dict,
+    plugin_dir: str,
+    logger: Optional[logging.Logger] = None,
+) -> TicketPriceProvider:
     cls = _PROVIDER_REGISTRY.get(name)
     if cls is None:
         available = ", ".join(sorted(_PROVIDER_REGISTRY))
         raise ValueError(f"未知数据源 {name!r}，可用数据源：{available}")
-    return cls(config=config or {}, plugin_dir=plugin_dir)
+    return cls(config=config or {}, plugin_dir=plugin_dir, logger=logger)
